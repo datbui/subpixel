@@ -13,7 +13,7 @@ from utils import *
 
 
 def doresize(x, shape):
-    x = np.copy((x+1.)*127.5).astype("uint8")
+    x = np.copy(x*127.5).astype("uint8")
     y = imresize(x, shape)
     return y
 

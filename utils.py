@@ -83,7 +83,7 @@ def transform(image, npx=128, is_crop=True):
         cropped_image = center_crop(image, npx)
     else:
         cropped_image = image
-    return np.array(cropped_image) / 127.5 - 1.
+    return np.array(cropped_image) / 255.0
 
 
 def inverse_transform(images):
