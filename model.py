@@ -1,14 +1,16 @@
 from __future__ import division
+
 import os
 import time
 from glob import glob
-import tensorflow as tf
-from six.moves import xrange
+
 from scipy.misc import imresize
-from subpixel import PS
+from six.moves import xrange
 
 from ops import *
+from subpixel import PS
 from utils import *
+
 
 def doresize(x, shape):
     x = np.copy((x+1.)*127.5).astype("uint8")
@@ -163,14 +165,16 @@ class DCGAN(object):
 
     def generator(self, z):
         # project `z` and reshape
-        self.h0, self.h0_w, self.h0_b = deconv2d(z, [self.batch_size, 32, 32, self.gf_dim], k_h=1, k_w=1, d_h=1, d_w=1, name='g_h0', with_w=True)
+        self.h0, self.h0_w, self.h0_b = deconv2d(z, [self.batch_size, self.input_size, self.input_size, self.gf_dim], k_h=1, k_w=1, d_h=1, d_w=1, name='g_h0', with_w=True)
         h0 = lrelu(self.h0)
 
-        self.h1, self.h1_w, self.h1_b = deconv2d(h0, [self.batch_size, 32, 32, self.gf_dim], name='g_h1', d_h=1, d_w=1, with_w=True)
+        self.h1, self.h1_w, self.h1_b = deconv2d(h0, [self.batch_size, self.input_size, self.input_size, self.gf_dim], name='g_h1', d_h=1, d_w=1, with_w=True)
         h1 = lrelu(self.h1)
 
-        h2, self.h2_w, self.h2_b = deconv2d(h1, [self.batch_size, 32, 32, 3*16], d_h=1, d_w=1, name='g_h2', with_w=True)
-        upscale_rate = self.image_size / self.input_size
+        upscale_rate = int(self.image_size / self.input_size)
+        print("scale  %d" % upscale_rate)
+        h2, self.h2_w, self.h2_b = deconv2d(h1, [self.batch_size, self.input_size, self.input_size, 3*upscale_rate*upscale_rate], d_h=1, d_w=1, name='g_h2', with_w=True)
+
         h2 = PS(h2, upscale_rate, color=True)
 
         return tf.nn.tanh(h2)
