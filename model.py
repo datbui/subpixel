@@ -16,10 +16,9 @@ def doresize(x, shape):
     return y
 
 class DCGAN(object):
-    def __init__(self, sess, image_size=128, is_crop=True,
-                 batch_size=64, image_shape=[128, 128, 3],
+    def __init__(self, sess, image_size=512, input_size=256, is_crop=True, batch_size=64,
                  y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
-                 gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
+                 gfc_dim=1024, dfc_dim=1024, dataset_name='default',
                  checkpoint_dir=None):
         """
 
@@ -38,9 +37,9 @@ class DCGAN(object):
         self.is_crop = is_crop
         self.batch_size = batch_size
         self.image_size = image_size
-        self.input_size = 32
+        self.input_size = input_size
         self.sample_size = batch_size
-        self.image_shape = image_shape
+        self.image_shape = [image_size, image_size, 3]
 
         self.y_dim = y_dim
         self.z_dim = z_dim
@@ -50,8 +49,6 @@ class DCGAN(object):
 
         self.gfc_dim = gfc_dim
         self.dfc_dim = dfc_dim
-
-        self.c_dim = 3
 
         self.dataset_name = dataset_name
         self.checkpoint_dir = checkpoint_dir
@@ -89,7 +86,7 @@ class DCGAN(object):
     def train(self, config):
         """Train DCGAN"""
         # first setup validation data
-        data = sorted(glob(os.path.join("./data", config.dataset, "valid", "*.jpg")))
+        # data = sorted(glob(os.path.join("./data", config.dataset, "valid", "*.tif")))
 
         g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
                           .minimize(self.g_loss, var_list=self.g_vars)
@@ -99,6 +96,7 @@ class DCGAN(object):
         self.g_sum = tf.summary.merge([self.G_sum, self.g_loss_sum])
         self.writer = tf.summary.FileWriter("./logs", self.sess.graph)
 
+        """
         sample_files = data[0:self.sample_size]
         sample = [get_image(sample_file, self.image_size, is_crop=self.is_crop) for sample_file in sample_files]
         sample_inputs = [doresize(xx, [self.input_size,]*2) for xx in sample]
@@ -107,6 +105,7 @@ class DCGAN(object):
 
         save_images(sample_input_images, [8, 8], './samples/inputs_small.png')
         save_images(sample_images, [8, 8], './samples/reference.png')
+        """
 
         counter = 1
         start_time = time.time()
@@ -119,14 +118,20 @@ class DCGAN(object):
         # we only save the validation inputs once
         have_saved_inputs = False
 
+
+
+        highres_data = sorted(glob(os.path.join("../images", config.dataset, "highres", "*.png")))
+        highres = [get_image(file, self.image_size, is_crop=self.is_crop) for file in highres_data]
+        lowres_data = sorted(glob(os.path.join("../images", config.dataset, "lowres", "*.png")))
+        lowres = [get_image(file, self.input_size, is_crop=self.is_crop) for file in lowres_data]
+
+        batch_idxs = min(len(highres_data), len(lowres_data), config.train_size) // config.batch_size
+
         for epoch in xrange(config.epoch):
-            data = sorted(glob(os.path.join("./data", config.dataset, "train", "*.jpg")))
-            batch_idxs = min(len(data), config.train_size) // config.batch_size
 
             for idx in xrange(0, batch_idxs):
-                batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
-                batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop) for batch_file in batch_files]
-                input_batch = [doresize(xx, [self.input_size,]*2) for xx in batch]
+                batch = highres[idx*config.batch_size:(idx+1)*config.batch_size]
+                input_batch = lowres[idx*config.batch_size:(idx+1)*config.batch_size]
                 batch_images = np.array(batch).astype(np.float32)
                 batch_inputs = np.array(input_batch).astype(np.float32)
 
@@ -140,6 +145,7 @@ class DCGAN(object):
                     % (epoch, idx, batch_idxs,
                         time.time() - start_time, errG))
 
+                """
                 if np.mod(counter, 100) == 1:
                     samples, g_loss, up_inputs = self.sess.run(
                         [self.G, self.g_loss, self.up_inputs],
@@ -151,7 +157,7 @@ class DCGAN(object):
                     save_images(samples, [8, 8],
                                 './samples/valid_%s_%s.png' % (epoch, idx))
                     print("[Sample] g_loss: %.8f" % (g_loss))
-
+                """
                 if np.mod(counter, 500) == 2:
                     self.save(config.checkpoint_dir, counter)
 
@@ -164,7 +170,8 @@ class DCGAN(object):
         h1 = lrelu(self.h1)
 
         h2, self.h2_w, self.h2_b = deconv2d(h1, [self.batch_size, 32, 32, 3*16], d_h=1, d_w=1, name='g_h2', with_w=True)
-        h2 = PS(h2, 4, color=True)
+        upscale_rate = self.image_size / self.input_size
+        h2 = PS(h2, upscale_rate, color=True)
 
         return tf.nn.tanh(h2)
 
